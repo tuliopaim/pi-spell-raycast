@@ -1,18 +1,92 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "gemini-spell",
-  "title": "Gemini Spell ",
-  "description": "",
+  "title": "Gemini Spell Checker",
+  "description": "Fix spelling and rewrite selected text with Google Gemini.",
   "icon": "extension-icon.png",
   "author": "tulio_paim",
-  "owner": "tulio-paim",
+  "owner": "raycast",
   "license": "MIT",
   "commands": [
     {
       "name": "gemini-spell",
       "title": "Gemini Spell",
-      "description": "",
-      "mode": "view"
+      "description": "Fix and rewrite selected text",
+      "mode": "view",
+      "preferences": [
+        {
+          "name": "googleApiKey",
+          "title": "Google API Key",
+          "description": "Gemini API key from Google AI Studio",
+          "type": "password",
+          "required": true
+        },
+        {
+          "name": "defaultModel",
+          "title": "Default Model",
+          "description": "Primary model alias to request first",
+          "type": "dropdown",
+          "default": "gemini-flash-lite-latest",
+          "required": true,
+          "data": [
+            {
+              "title": "Gemini Flash-Lite (Latest Alias)",
+              "value": "gemini-flash-lite-latest"
+            },
+            {
+              "title": "Gemini 2.5 Flash-Lite",
+              "value": "gemini-2.5-flash-lite"
+            },
+            {
+              "title": "Gemini 2.5 Flash",
+              "value": "gemini-2.5-flash"
+            }
+          ]
+        },
+        {
+          "name": "requestTimeoutMs",
+          "title": "Request Timeout (ms)",
+          "description": "Abort requests slower than this timeout",
+          "type": "textfield",
+          "default": "12000",
+          "required": true
+        },
+        {
+          "name": "maxRetries",
+          "title": "Max Retries",
+          "description": "Retries per model for transient failures",
+          "type": "dropdown",
+          "default": "2",
+          "required": true,
+          "data": [
+            {
+              "title": "0",
+              "value": "0"
+            },
+            {
+              "title": "1",
+              "value": "1"
+            },
+            {
+              "title": "2",
+              "value": "2"
+            },
+            {
+              "title": "3",
+              "value": "3"
+            }
+          ]
+        },
+        {
+          "name": "debugLogs",
+          "title": "Debug Logs",
+          "description": "Log request and retry details to Raycast console",
+          "type": "checkbox",
+          "label": "Enable debug logs in Raycast console",
+          "default": false,
+          "required": true
+        }
+      ]
     }
   ],
   "dependencies": {

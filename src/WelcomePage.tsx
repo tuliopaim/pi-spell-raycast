@@ -1,26 +1,22 @@
-import { Detail, ActionPanel, Action } from "@raycast/api";
+import { Detail, ActionPanel, Action, openCommandPreferences } from "@raycast/api";
 
 interface WelcomePageProps {
   isLoading: boolean;
-  onEditApiKey: () => void;
-  onEnterPress?: () => void;
+  message?: string;
 }
 
-export function WelcomePage({ isLoading, onEditApiKey, onEnterPress }: WelcomePageProps) {
+export function WelcomePage({ isLoading, message }: WelcomePageProps) {
   return (
     <Detail
       markdown={`
 ## Gemini Spell Checker
 
-Select some text in any application and press Enter to check spelling and grammar.
+${message ?? "Select text in any application and run this command to fix and rewrite it."}
 `}
       isLoading={isLoading}
       actions={
         <ActionPanel>
-          {onEnterPress && (
-            <Action title="Process Text" onAction={onEnterPress} shortcut={{ modifiers: [], key: "return" }} />
-          )}
-          <Action title="Edit Api Key" onAction={onEditApiKey} />
+          <Action title="Open Command Preferences" onAction={openCommandPreferences} />
         </ActionPanel>
       }
     />

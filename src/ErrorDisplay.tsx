@@ -1,23 +1,22 @@
-import { Detail, ActionPanel, Action } from "@raycast/api";
+import { Detail, ActionPanel, Action, openCommandPreferences } from "@raycast/api";
 
 interface ErrorDisplayProps {
   isLoading: boolean;
-  onEditApiKey: () => void;
   errorMessage: string | null;
 }
 
-export function ErrorDisplay({ isLoading, errorMessage, onEditApiKey }: ErrorDisplayProps) {
+export function ErrorDisplay({ isLoading, errorMessage }: ErrorDisplayProps) {
   return (
     <Detail
       markdown={`
-## Gemini Spell Checker.
+## Gemini Spell Checker
 
-- ⚠️ ${errorMessage} 
+- ⚠️ ${errorMessage}
 `}
       isLoading={isLoading}
       actions={
         <ActionPanel>
-          <Action title="Edit Api Key" onAction={onEditApiKey} />
+          <Action title="Open Command Preferences" onAction={openCommandPreferences} />
         </ActionPanel>
       }
     />
