@@ -6,13 +6,46 @@ interface WelcomePageProps {
 }
 
 export function WelcomePage({ isLoading, message }: WelcomePageProps) {
+  const loadingMarkdown = `
+# Pi Spell
+
+## Working on it...
+
+${message ?? "Generating suggestions from your selected text."}
+
+This can take a few seconds while Pi runs locally.
+`;
+
+  const homeMarkdown = `
+# Pi Spell
+
+## Let's polish something
+
+${message ?? "Select any text and run this command to get cleaner, clearer writing."}
+
+### Great for
+
+- Pull request comments
+- Slack or email drafts
+- Docs and README snippets
+- Code comments and commit messages
+
+### What you get
+
+- **Minimal Fix**: spelling and grammar only
+- **Neutral Polish**: fluent US English (recommended)
+- **Concise Professional**: shorter and sharper wording
+
+### Quick flow
+
+1. Select text in any app
+2. Open **Pi Spell**
+3. Choose a suggestion and press **Enter** to copy
+`;
+
   return (
     <Detail
-      markdown={`
-## Gemini Spell Checker
-
-${message ?? "Select text in any application and run this command to fix and rewrite it."}
-`}
+      markdown={isLoading ? loadingMarkdown : homeMarkdown}
       isLoading={isLoading}
       actions={
         <ActionPanel>

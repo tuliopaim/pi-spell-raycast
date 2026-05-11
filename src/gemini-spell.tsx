@@ -1,6 +1,9 @@
 import { getPreferenceValues, getSelectedText, showToast, Toast } from "@raycast/api";
+import { spawn } from "child_process";
+import { existsSync, statSync } from "fs";
+import { homedir } from "os";
+import { join } from "path";
 import { useEffect, useState } from "react";
-import fetch from "node-fetch";
 import { ErrorDisplay } from "./ErrorDisplay";
 import { TextComparison } from "./TextComparison";
 import { WelcomePage } from "./WelcomePage";
@@ -10,7 +13,19 @@ Return only valid JSON.
 Use US English.
 Do not add explanations, markdown, or extra keys.`;
 
-const MODEL_FALLBACK_CHAIN = ["gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-2.5-flash"] as const;
+const DEFAULT_PI_MODEL = "opencode-go/deepseek-v4-flash";
+const DEFAULT_PI_THINKING = "off";
+const DEFAULT_TIMEOUT_MS = 120000;
+const PI_PATHS = [
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+  join(homedir(), ".nix-profile/bin"),
+  "/run/current-system/sw/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+];
 
 type SuggestionVariantId = "minimal_fix" | "neutral_polish" | "concise_professional";
 type ParseMode = "json" | "fallback";
@@ -18,10 +33,10 @@ type ParseMode = "json" | "fallback";
 type ProcessingStatus = "success" | "success_with_fallback_parse";
 
 export interface CommandPreferences {
-  googleApiKey: string;
-  defaultModel: string;
+  piBin?: string;
+  piModel: string;
+  piThinking: string;
   requestTimeoutMs: string;
-  maxRetries: string;
   debugLogs: boolean;
 }
 
@@ -40,36 +55,13 @@ export interface ProcessingMetrics {
   status: ProcessingStatus;
   parseMode: ParseMode;
   timestamp: string;
+  thinking: string;
 }
 
-interface GeminiResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        text?: string;
-      }>;
-    };
-  }>;
-}
-
-class GeminiRequestError extends Error {
-  statusCode?: number;
-  retryable: boolean;
-  modelUnavailable: boolean;
-
-  constructor(
-    message: string,
-    options: {
-      statusCode?: number;
-      retryable?: boolean;
-      modelUnavailable?: boolean;
-    } = {},
-  ) {
+class PiRequestError extends Error {
+  constructor(message: string) {
     super(message);
-    this.name = "GeminiRequestError";
-    this.statusCode = options.statusCode;
-    this.retryable = options.retryable ?? false;
-    this.modelUnavailable = options.modelUnavailable ?? false;
+    this.name = "PiRequestError";
   }
 }
 
@@ -83,11 +75,7 @@ function logEvent(debugLogs: boolean, event: string, payload: Record<string, unk
     return;
   }
 
-  console.log(`[gemini-spell] ${event} ${JSON.stringify(payload)}`);
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  console.log(`[pi-spell] ${event} ${JSON.stringify(payload)}`);
 }
 
 function parsePositiveInt(raw: string, defaultValue: number, minValue: number, maxValue: number): number {
@@ -184,270 +172,319 @@ function parseSuggestions(rawText: string): { suggestions: SuggestionVariant[]; 
   };
 }
 
-function getOrderedModels(defaultModel: string): string[] {
-  const models = [defaultModel.trim(), ...MODEL_FALLBACK_CHAIN].filter(Boolean);
-  return [...new Set(models)];
-}
-
-function classifyStatusError(statusCode: number, message: string): GeminiRequestError {
-  const retryable = statusCode === 429 || (statusCode >= 500 && statusCode <= 599);
-  const modelUnavailable =
-    statusCode === 404 ||
-    (statusCode === 400 && /(model|not found|unsupported|unavailable|does not exist)/i.test(message));
-
-  return new GeminiRequestError(message, {
-    statusCode,
-    retryable,
-    modelUnavailable,
-  });
-}
-
-function normalizeError(error: unknown): GeminiRequestError {
-  if (error instanceof GeminiRequestError) {
+function normalizeError(error: unknown): PiRequestError {
+  if (error instanceof PiRequestError) {
     return error;
   }
 
   if (error instanceof Error) {
-    if (error.name === "AbortError") {
-      return new GeminiRequestError("Request timed out", {
-        retryable: true,
-      });
-    }
-
-    const retryable = /(timed out|network|socket|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed)/i.test(error.message);
-    return new GeminiRequestError(error.message || "Unexpected request error", {
-      retryable,
-    });
+    return new PiRequestError(error.message || "Unexpected Pi error");
   }
 
-  return new GeminiRequestError("Unexpected unknown error");
+  return new PiRequestError("Unexpected unknown error");
 }
 
-function createRequestBody(selectedText: string) {
-  return {
-    system_instruction: {
-      parts: [{ text: SYSTEM_INSTRUCTION }],
-    },
-    contents: [
-      {
-        parts: [
-          {
-            text: `Rewrite the text between <input></input> and return only valid JSON with exactly these keys: minimal_fix, neutral_polish, concise_professional.
+function createPiPrompt(selectedText: string): string {
+  return `${SYSTEM_INSTRUCTION}
+
+Rewrite the text between <input></input> and return only valid JSON with exactly these keys: minimal_fix, neutral_polish, concise_professional.
 - minimal_fix: Correct spelling and grammar only. Keep original tone and structure.
 - neutral_polish: Fluent, natural US English.
 - concise_professional: Shorter and professional while preserving meaning.
 Do not include markdown or extra keys.
-<input>${selectedText}</input>`,
-          },
-        ],
-      },
-    ],
-    generation_config: {
-      temperature: 0.2,
-      response_mime_type: "application/json",
-    },
+<input>${selectedText}</input>`;
+}
+
+function isExecutableFile(path: string): boolean {
+  try {
+    return existsSync(path) && statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function buildPiEnv(): NodeJS.ProcessEnv {
+  const pathParts = [...PI_PATHS, process.env.PATH].filter(Boolean);
+  return {
+    ...process.env,
+    HOME: process.env.HOME || homedir(),
+    PATH: pathParts.join(":"),
   };
 }
 
-async function generateForModel(args: {
-  apiKey: string;
+function resolvePiBin(preference?: string): string {
+  const candidates = [
+    preference?.trim(),
+    process.env.PI_SPELL_PI_BIN,
+    process.env.GEMINI_SPELL_PI_BIN,
+    process.env.PI_BIN,
+    ...PI_PATHS.map((dir) => join(dir, "pi")),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    if (candidate.includes("/") && isExecutableFile(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "pi";
+}
+
+function isProcessRunning(child: ReturnType<typeof spawn>): boolean {
+  return child.exitCode === null && child.signalCode === null;
+}
+
+function terminateProcess(child: ReturnType<typeof spawn>) {
+  if (isProcessRunning(child)) {
+    child.kill("SIGTERM");
+  }
+
+  setTimeout(() => {
+    if (isProcessRunning(child)) {
+      child.kill("SIGKILL");
+    }
+  }, 1000).unref();
+}
+
+async function runPi(args: {
+  piBin: string;
   model: string;
-  selectedText: string;
+  thinking: string;
+  prompt: string;
   timeoutMs: number;
-}): Promise<{ suggestions: SuggestionVariant[]; parseMode: ParseMode }> {
-  const { apiKey, model, selectedText, timeoutMs } = args;
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  debugLogs: boolean;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const { piBin, model, thinking, prompt, timeoutMs, debugLogs, signal } = args;
+  const piArgs = [
+    "--model",
+    model,
+    "--thinking",
+    thinking,
+    "-nt",
+    "--no-session",
+    "--no-extensions",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-themes",
+    "-nc",
+    "--print",
+  ];
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(createRequestBody(selectedText)),
-        signal: controller.signal,
-      },
-    );
+  logEvent(debugLogs, "pi_start", { piBin, args: piArgs, timeoutMs });
 
-    if (!response.ok) {
-      let errorMessage = "Unknown API error";
-      try {
-        const errorData = (await response.json()) as { error?: { message?: string } };
-        errorMessage = errorData.error?.message || errorMessage;
-      } catch {
-        const rawErrorText = await response.text();
-        if (rawErrorText) {
-          errorMessage = rawErrorText;
-        }
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(piBin, piArgs, {
+      env: buildPiEnv(),
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    const finish = (error?: Error, output?: string) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeoutHandle);
+      signal?.removeEventListener("abort", abortHandler);
+      if (isProcessRunning(child)) {
+        child.kill("SIGTERM");
+      }
+      if (error) {
+        reject(error);
+      } else {
+        resolve(output ?? "");
+      }
+    };
+
+    const abortHandler = () => {
+      terminateProcess(child);
+      finish(new PiRequestError("Pi process was canceled."));
+    };
+
+    const timeoutHandle = setTimeout(() => {
+      terminateProcess(child);
+      finish(new PiRequestError(`Pi timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+
+    signal?.addEventListener("abort", abortHandler);
+
+    child.on("error", (error) => {
+      const message = error.message.includes("ENOENT")
+        ? "Pi CLI was not found. Install `pi` or set Pi Binary Path in command preferences."
+        : `Failed to start Pi CLI: ${error.message}`;
+      finish(new PiRequestError(message));
+    });
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    child.on("close", (code, signalName) => {
+      if (settled) {
+        return;
       }
 
-      throw classifyStatusError(response.status, errorMessage);
-    }
+      const trimmedStdout = stdout.trim();
+      if (code !== 0) {
+        const stderrSummary = stderr.trim().slice(0, 500);
+        finish(
+          new PiRequestError(
+            `Pi exited with code ${code ?? signalName ?? "unknown"}.${stderrSummary ? ` ${stderrSummary}` : ""}`,
+          ),
+        );
+        return;
+      }
 
-    const data = (await response.json()) as GeminiResponse;
-    const responseText =
-      data.candidates?.[0]?.content?.parts
-        ?.map((part) => part.text ?? "")
-        .join("\n")
-        .trim() ?? "";
+      if (!trimmedStdout) {
+        finish(new PiRequestError("Pi returned an empty response."));
+        return;
+      }
 
-    if (!responseText) {
-      throw new GeminiRequestError("Gemini returned an empty response.");
-    }
+      logEvent(debugLogs, "pi_success", { stdoutBytes: stdout.length, stderrBytes: stderr.length });
+      finish(undefined, trimmedStdout);
+    });
 
-    return parseSuggestions(responseText);
-  } catch (error) {
-    throw normalizeError(error);
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
+    child.stdin.on("error", () => {
+      // The child may close stdin early; process close/error handlers decide the final result.
+    });
+    child.stdin.end(prompt);
+  });
+}
+
+async function generateWithPi(args: {
+  piBin: string;
+  model: string;
+  thinking: string;
+  selectedText: string;
+  timeoutMs: number;
+  debugLogs: boolean;
+  signal?: AbortSignal;
+}): Promise<{ suggestions: SuggestionVariant[]; parseMode: ParseMode }> {
+  const responseText = await runPi({
+    piBin: args.piBin,
+    model: args.model,
+    thinking: args.thinking,
+    prompt: createPiPrompt(args.selectedText),
+    timeoutMs: args.timeoutMs,
+    debugLogs: args.debugLogs,
+    signal: args.signal,
+  });
+
+  return parseSuggestions(responseText);
 }
 
 async function processSelectedText(args: {
   selectedText: string;
-  apiKey: string;
-  defaultModel: string;
+  piBin: string;
+  piModel: string;
+  piThinking: string;
   timeoutMs: number;
-  maxRetries: number;
   debugLogs: boolean;
+  onAttempt?: (attempt: number, model: string) => void;
+  signal?: AbortSignal;
 }): Promise<ProcessResult> {
-  const { selectedText, apiKey, defaultModel, timeoutMs, maxRetries, debugLogs } = args;
+  const { selectedText, piBin, piModel, piThinking, timeoutMs, debugLogs, onAttempt, signal } = args;
   const startedAt = Date.now();
-  const models = getOrderedModels(defaultModel);
+  const attempts = 1;
 
-  let attempts = 0;
-  let lastError: GeminiRequestError | null = null;
+  onAttempt?.(attempts, piModel);
+  logEvent(debugLogs, "request_start", { attempt: attempts, model: piModel, thinking: piThinking });
 
-  for (let index = 0; index < models.length; index += 1) {
-    const model = models[index];
-    const hasNextModel = index < models.length - 1;
-    let retriesForModel = 0;
+  const result = await generateWithPi({
+    piBin,
+    model: piModel,
+    thinking: piThinking,
+    selectedText,
+    timeoutMs,
+    debugLogs,
+    signal,
+  });
 
-    for (;;) {
-      attempts += 1;
-      logEvent(debugLogs, "request_start", {
-        attempt: attempts,
-        model,
-      });
+  const latencyMs = Date.now() - startedAt;
+  const status: ProcessingStatus = result.parseMode === "json" ? "success" : "success_with_fallback_parse";
 
-      try {
-        const result = await generateForModel({
-          apiKey,
-          model,
-          selectedText,
-          timeoutMs,
-        });
+  logEvent(debugLogs, "request_success", {
+    attempt: attempts,
+    model: piModel,
+    latencyMs,
+    parseMode: result.parseMode,
+    status,
+  });
 
-        const latencyMs = Date.now() - startedAt;
-        const status: ProcessingStatus = result.parseMode === "json" ? "success" : "success_with_fallback_parse";
-
-        logEvent(debugLogs, "request_success", {
-          attempt: attempts,
-          model,
-          latencyMs,
-          parseMode: result.parseMode,
-          status,
-        });
-
-        return {
-          suggestions: result.suggestions,
-          metrics: {
-            modelRequested: defaultModel,
-            modelResolved: model,
-            latencyMs,
-            attempts,
-            status,
-            parseMode: result.parseMode,
-            timestamp: new Date().toISOString(),
-          },
-        };
-      } catch (error) {
-        const requestError = normalizeError(error);
-        lastError = requestError;
-
-        logEvent(debugLogs, "request_error", {
-          attempt: attempts,
-          model,
-          statusCode: requestError.statusCode,
-          retryable: requestError.retryable,
-          modelUnavailable: requestError.modelUnavailable,
-          message: requestError.message,
-        });
-
-        if (requestError.retryable && retriesForModel < maxRetries) {
-          const retryDelayMs = 250 * 2 ** retriesForModel;
-          retriesForModel += 1;
-
-          logEvent(debugLogs, "request_retry", {
-            attempt: attempts,
-            model,
-            retryNumber: retriesForModel,
-            waitMs: retryDelayMs,
-          });
-
-          await sleep(retryDelayMs);
-          continue;
-        }
-
-        if (hasNextModel && (requestError.modelUnavailable || requestError.retryable)) {
-          logEvent(debugLogs, "request_fallback_model", {
-            fromModel: model,
-            toModel: models[index + 1],
-            reason: requestError.message,
-          });
-          break;
-        }
-
-        throw requestError;
-      }
-    }
-  }
-
-  throw lastError ?? new GeminiRequestError("Unable to process text with available models.");
+  return {
+    suggestions: result.suggestions,
+    metrics: {
+      modelRequested: piModel,
+      modelResolved: piModel,
+      latencyMs,
+      attempts,
+      status,
+      parseMode: result.parseMode,
+      timestamp: new Date().toISOString(),
+      thinking: piThinking,
+    },
+  };
 }
 
 export default function Command() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [originalText, setOriginalText] = useState<string>("");
   const [suggestions, setSuggestions] = useState<SuggestionVariant[]>([]);
   const [metrics, setMetrics] = useState<ProcessingMetrics | null>(null);
+  const [homeMessage, setHomeMessage] = useState<string | undefined>(undefined);
+  const [loadingMessage, setLoadingMessage] = useState("Processing selected text with Pi...");
 
   useEffect(() => {
     let mounted = true;
+    const abortController = new AbortController();
 
     async function init() {
-      setIsLoading(true);
+      setIsLoading(false);
       setError(null);
+      setOriginalText("");
+      setSuggestions([]);
+      setMetrics(null);
+      setHomeMessage(undefined);
+      setLoadingMessage("Processing selected text with Pi...");
 
       try {
-        const preferences = getPreferenceValues<CommandPreferences>();
-        const apiKey = preferences.googleApiKey?.trim();
-        const defaultModel = preferences.defaultModel?.trim() || "gemini-flash-lite-latest";
-        const timeoutMs = parsePositiveInt(preferences.requestTimeoutMs, 12000, 1000, 60000);
-        const maxRetries = parsePositiveInt(preferences.maxRetries, 2, 0, 5);
-        const debugLogs = Boolean(preferences.debugLogs);
-
-        if (!apiKey) {
-          throw new GeminiRequestError("Google API key is missing. Open extension preferences and set the key.");
-        }
-
-        let selectedText: string;
+        let selectedText = "";
         try {
           selectedText = await getSelectedText();
         } catch {
-          throw new GeminiRequestError("No text selected. Select text in any app and run the command again.");
+          // ignore: no selection is treated as a normal home state
         }
 
-        if (!selectedText.trim()) {
-          throw new GeminiRequestError("No text selected. Select text in any app and run the command again.");
+        if (!mounted) {
+          return;
         }
 
-        if (looksLikeRuntimeStackTrace(selectedText)) {
-          throw new GeminiRequestError(
+        const normalizedSelectedText = selectedText.trim();
+        if (!normalizedSelectedText) {
+          setHomeMessage("Let's improve something. Select text in any app and run Pi Spell.");
+          return;
+        }
+
+        setIsLoading(true);
+        setLoadingMessage("Processing selected text with Pi...");
+
+        const preferences = getPreferenceValues<CommandPreferences>();
+        const piBin = resolvePiBin(preferences.piBin);
+        const piModel = preferences.piModel?.trim() || DEFAULT_PI_MODEL;
+        const piThinking = preferences.piThinking?.trim() || DEFAULT_PI_THINKING;
+        const timeoutMs = parsePositiveInt(preferences.requestTimeoutMs, DEFAULT_TIMEOUT_MS, 1000, 300000);
+        const debugLogs = Boolean(preferences.debugLogs);
+
+        if (looksLikeRuntimeStackTrace(normalizedSelectedText)) {
+          throw new PiRequestError(
             "Selected text looks like a runtime stack trace. Deselect logs and select the text you want to rewrite.",
           );
         }
@@ -456,15 +493,23 @@ export default function Command() {
           return;
         }
 
-        setOriginalText(selectedText);
+        setOriginalText(normalizedSelectedText);
 
         const result = await processSelectedText({
-          selectedText,
-          apiKey,
-          defaultModel,
+          selectedText: normalizedSelectedText,
+          piBin,
+          piModel,
+          piThinking,
           timeoutMs,
-          maxRetries,
           debugLogs,
+          signal: abortController.signal,
+          onAttempt: (attempt, model) => {
+            if (!mounted) {
+              return;
+            }
+
+            setLoadingMessage(`Processing selected text with Pi (attempt ${attempt}, model: ${model})...`);
+          },
         });
 
         if (!mounted) {
@@ -478,7 +523,7 @@ export default function Command() {
           await showToast({
             style: Toast.Style.Animated,
             title: "Used fallback parsing",
-            message: "Model returned non-JSON output; showing best-effort suggestions.",
+            message: "Pi returned non-JSON output; showing best-effort suggestions.",
           });
         }
       } catch (error) {
@@ -505,6 +550,7 @@ export default function Command() {
 
     return () => {
       mounted = false;
+      abortController.abort();
     };
   }, []);
 
@@ -512,8 +558,12 @@ export default function Command() {
     return <ErrorDisplay isLoading={isLoading} errorMessage={error} />;
   }
 
+  if (isLoading) {
+    return <WelcomePage isLoading={isLoading} message={loadingMessage} />;
+  }
+
   if (!metrics || suggestions.length === 0) {
-    return <WelcomePage isLoading={isLoading} />;
+    return <WelcomePage isLoading={isLoading} message={homeMessage} />;
   }
 
   return <TextComparison originalText={originalText} suggestions={suggestions} metrics={metrics} />;

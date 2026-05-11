@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "gemini-spell",
-  "title": "Gemini Spell Checker",
-  "description": "Fix spelling and rewrite selected text with Google Gemini.",
+  "title": "Pi Spell Checker",
+  "description": "Fix spelling and rewrite selected text with the local Pi CLI.",
   "icon": "extension-icon.png",
   "author": "tulio_paim",
   "owner": "raycast",
@@ -10,77 +10,71 @@
   "commands": [
     {
       "name": "gemini-spell",
-      "title": "Gemini Spell",
+      "title": "Pi Spell",
       "description": "Fix and rewrite selected text",
       "mode": "view",
       "preferences": [
         {
-          "name": "googleApiKey",
-          "title": "Google API Key",
-          "description": "Gemini API key from Google AI Studio",
-          "type": "password",
+          "name": "piBin",
+          "title": "Pi Binary Path",
+          "description": "Optional absolute path to the pi executable. Leave blank to resolve from common PATH locations.",
+          "type": "textfield",
+          "required": false
+        },
+        {
+          "name": "piModel",
+          "title": "Pi Model",
+          "description": "Model to pass to pi --model",
+          "type": "textfield",
+          "default": "opencode-go/deepseek-v4-flash",
           "required": true
         },
         {
-          "name": "defaultModel",
-          "title": "Default Model",
-          "description": "Primary model alias to request first",
+          "name": "piThinking",
+          "title": "Pi Thinking",
+          "description": "Thinking level to pass to pi --thinking",
           "type": "dropdown",
-          "default": "gemini-flash-lite-latest",
+          "default": "off",
           "required": true,
           "data": [
             {
-              "title": "Gemini Flash-Lite (Latest Alias)",
-              "value": "gemini-flash-lite-latest"
+              "title": "Off",
+              "value": "off"
             },
             {
-              "title": "Gemini 2.5 Flash-Lite",
-              "value": "gemini-2.5-flash-lite"
+              "title": "Minimal",
+              "value": "minimal"
             },
             {
-              "title": "Gemini 2.5 Flash",
-              "value": "gemini-2.5-flash"
+              "title": "Low",
+              "value": "low"
+            },
+            {
+              "title": "Medium",
+              "value": "medium"
+            },
+            {
+              "title": "High",
+              "value": "high"
+            },
+            {
+              "title": "XHigh",
+              "value": "xhigh"
             }
           ]
         },
         {
           "name": "requestTimeoutMs",
           "title": "Request Timeout (ms)",
-          "description": "Abort requests slower than this timeout",
+          "description": "Cancel Pi runs slower than this timeout",
           "type": "textfield",
-          "default": "12000",
+          "default": "120000",
           "required": true
-        },
-        {
-          "name": "maxRetries",
-          "title": "Max Retries",
-          "description": "Retries per model for transient failures",
-          "type": "dropdown",
-          "default": "2",
-          "required": true,
-          "data": [
-            {
-              "title": "0",
-              "value": "0"
-            },
-            {
-              "title": "1",
-              "value": "1"
-            },
-            {
-              "title": "2",
-              "value": "2"
-            },
-            {
-              "title": "3",
-              "value": "3"
-            }
-          ]
         },
         {
           "name": "debugLogs",
           "title": "Debug Logs",
-          "description": "Log request and retry details to Raycast console",
+          "description": "Log Pi execution details to Raycast console without sensitive environment values",
           "type": "checkbox",
           "label": "Enable debug logs in Raycast console",
           "default": false,
@@ -91,13 +85,11 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.91.2",
-    "@raycast/utils": "^1.17.0",
-    "node-fetch": "^2.7.0"
+    "@raycast/utils": "^1.17.0"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",
     "@types/node": "20.8.10",
-    "@types/node-fetch": "^2.6.12",
     "@types/react": "18.3.3",
     "eslint": "^8.57.0",
     "prettier": "^3.3.3",
@@ -105,6 +97,7 @@
   },
   "scripts": {
     "build": "ray build",
+    "check:pi-cli-contract": "node scripts/check-pi-cli-contract.mjs",
     "dev": "ray develop",
     "fix-lint": "ray lint --fix",
     "lint": "ray lint",

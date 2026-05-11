@@ -9,7 +9,7 @@ export function ErrorDisplay({ isLoading, errorMessage }: ErrorDisplayProps) {
   return (
     <Detail
       markdown={`
-## Gemini Spell Checker
+## Pi Spell Checker
 
 - ⚠️ ${errorMessage}
 `}

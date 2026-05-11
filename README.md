@@ -1,33 +1,36 @@
-# Gemini Spell
+# Pi Spell
 
-A Raycast extension that uses Google's Gemini API to fix spelling and generate three rewrite suggestions from selected text.
+A Raycast extension that uses the local `pi` CLI to fix spelling and generate three rewrite suggestions from selected text.
 
 ## Setup
 
-1. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/)
-2. Run `npm run dev` to install the extension
+1. Install and authenticate the Pi CLI so `pi` works from a terminal.
+2. Run `npm run dev` to install the extension.
 3. Open the command preferences and configure:
-   - `Google API Key` (secure password field)
-   - `Default Model` (defaults to `gemini-flash-lite-latest`)
-   - `Request Timeout (ms)` (defaults to `12000`)
-   - `Max Retries` (defaults to `2`)
+   - `Pi Binary Path` (optional; set this if Raycast cannot find `pi`)
+   - `Pi Model` (defaults to `opencode-go/deepseek-v4-flash`)
+   - `Pi Thinking` (defaults to `off`)
+   - `Request Timeout (ms)` (defaults to `120000`)
    - `Debug Logs` (defaults to off)
+
+No Google API key is required. Pi authentication is inherited from your local Pi environment.
 
 ## Usage
 
 1. Select text anywhere.
-2. Run the `Gemini Spell` command.
+2. Run the `Pi Spell` command.
 3. The command automatically processes the selected text and shows:
    - `Minimal Fix` (grammar/spelling only)
    - `Neutral Polish` (recommended)
    - `Concise Professional`
+4. Choose one suggestion and copy it:
+   - Keyboard: use arrow keys to select, then press `Enter` to copy and close.
+   - Mouse: double-click a suggestion to copy and close.
 
-## Reliability and Fallbacks
+## Reliability
 
-- The command requests the configured default model first.
-- Built-in fallback chain for Google models:
-  1. `gemini-flash-lite-latest`
-  2. `gemini-2.5-flash-lite`
-  3. `gemini-2.5-flash`
-- Retries transient failures (`429`, `5xx`, timeout/network) with exponential backoff.
-- Shows local observability metadata (model, latency, attempts, parse mode).
+- The command depends on a Pi CLI that supports these flags: `--print`, `--model`, `--thinking`, `-nt`, `--no-session`, `--no-extensions`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, and `-nc`.
+- The selected text is sent to Pi over stdin; no live model call is made by the `npm run check:pi-cli-contract` validation script.
+- Raycast GUI PATHs are limited, so the extension searches common Homebrew, Nix, and system paths. Set `Pi Binary Path` if needed.
+- Pi runs are canceled when the command closes and are timed out according to `Request Timeout (ms)`.
+- Shows local observability metadata (model, thinking, latency, attempts, parse mode).
