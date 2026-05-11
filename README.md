@@ -1,6 +1,6 @@
 # Pi Spell
 
-A Raycast extension that uses the local `pi` CLI to fix spelling and generate three rewrite suggestions from selected text.
+A Raycast extension that uses the local `pi` CLI to fix spelling and generate three rewrite suggestions from clipboard text.
 
 ## Setup
 
@@ -17,9 +17,9 @@ No Google API key is required. Pi authentication is inherited from your local Pi
 
 ## Usage
 
-1. Select text anywhere.
+1. Copy text from any app.
 2. Run the `Pi Spell` command.
-3. The command automatically processes the selected text and shows:
+3. The command automatically processes the clipboard text and shows:
    - `Minimal Fix` (grammar/spelling only)
    - `Neutral Polish` (recommended)
    - `Concise Professional`
@@ -30,7 +30,7 @@ No Google API key is required. Pi authentication is inherited from your local Pi
 ## Reliability
 
 - The command depends on a Pi CLI that supports these flags: `--print`, `--model`, `--thinking`, `-nt`, `--no-session`, `--no-extensions`, `--no-skills`, `--no-prompt-templates`, `--no-themes`, and `-nc`.
-- The selected text is sent to Pi over stdin; no live model call is made by the `npm run check:pi-cli-contract` validation script.
+- The clipboard text is sent to Pi over stdin; no live model call is made by the `npm run check:pi-cli-contract` validation script.
 - Raycast GUI PATHs are limited, so the extension searches common Homebrew, Nix, and system paths. Set `Pi Binary Path` if needed.
 - Pi runs are canceled when the command closes and are timed out according to `Request Timeout (ms)`.
 - Shows local observability metadata (model, thinking, latency, attempts, parse mode).

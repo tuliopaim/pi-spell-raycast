@@ -1,4 +1,4 @@
-import { getPreferenceValues, getSelectedText, showToast, Toast } from "@raycast/api";
+import { Clipboard, getPreferenceValues, showToast, Toast } from "@raycast/api";
 import { spawn } from "child_process";
 import { existsSync, statSync } from "fs";
 import { homedir } from "os";
@@ -439,7 +439,7 @@ export default function Command() {
   const [suggestions, setSuggestions] = useState<SuggestionVariant[]>([]);
   const [metrics, setMetrics] = useState<ProcessingMetrics | null>(null);
   const [homeMessage, setHomeMessage] = useState<string | undefined>(undefined);
-  const [loadingMessage, setLoadingMessage] = useState("Processing selected text with Pi...");
+  const [loadingMessage, setLoadingMessage] = useState("Processing clipboard text with Pi...");
 
   useEffect(() => {
     let mounted = true;
@@ -452,15 +452,10 @@ export default function Command() {
       setSuggestions([]);
       setMetrics(null);
       setHomeMessage(undefined);
-      setLoadingMessage("Processing selected text with Pi...");
+      setLoadingMessage("Processing clipboard text with Pi...");
 
       try {
-        let selectedText = "";
-        try {
-          selectedText = await getSelectedText();
-        } catch {
-          // ignore: no selection is treated as a normal home state
-        }
+        const selectedText = (await Clipboard.readText()) ?? "";
 
         if (!mounted) {
           return;
@@ -468,12 +463,12 @@ export default function Command() {
 
         const normalizedSelectedText = selectedText.trim();
         if (!normalizedSelectedText) {
-          setHomeMessage("Let's improve something. Select text in any app and run Pi Spell.");
+          setHomeMessage("Let's improve something. Copy text to your clipboard and run Pi Spell.");
           return;
         }
 
         setIsLoading(true);
-        setLoadingMessage("Processing selected text with Pi...");
+        setLoadingMessage("Processing clipboard text with Pi...");
 
         const preferences = getPreferenceValues<CommandPreferences>();
         const piBin = resolvePiBin(preferences.piBin);
@@ -484,7 +479,7 @@ export default function Command() {
 
         if (looksLikeRuntimeStackTrace(normalizedSelectedText)) {
           throw new PiRequestError(
-            "Selected text looks like a runtime stack trace. Deselect logs and select the text you want to rewrite.",
+            "Clipboard text looks like a runtime stack trace. Copy the text you want to rewrite instead of logs.",
           );
         }
 
@@ -507,7 +502,7 @@ export default function Command() {
               return;
             }
 
-            setLoadingMessage(`Processing selected text with Pi (attempt ${attempt}, model: ${model})...`);
+            setLoadingMessage(`Processing clipboard text with Pi (attempt ${attempt}, model: ${model})...`);
           },
         });
 

@@ -11,7 +11,7 @@ export function WelcomePage({ isLoading, message }: WelcomePageProps) {
 
 ## Working on it...
 
-${message ?? "Generating suggestions from your selected text."}
+${message ?? "Generating suggestions from your clipboard text."}
 
 This can take a few seconds while Pi runs locally.
 `;
@@ -21,7 +21,7 @@ This can take a few seconds while Pi runs locally.
 
 ## Let's polish something
 
-${message ?? "Select any text and run this command to get cleaner, clearer writing."}
+${message ?? "Copy any text and run this command to get cleaner, clearer writing."}
 
 ### Great for
 
@@ -38,7 +38,7 @@ ${message ?? "Select any text and run this command to get cleaner, clearer writi
 
 ### Quick flow
 
-1. Select text in any app
+1. Copy text from any app
 2. Open **Pi Spell**
 3. Choose a suggestion and press **Enter** to copy
 `;
