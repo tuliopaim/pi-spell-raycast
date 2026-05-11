@@ -1,6 +1,6 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
-  "name": "gemini-spell",
+  "name": "pi-spell",
   "title": "Pi Spell Checker",
   "description": "Fix spelling and rewrite selected text with the local Pi CLI.",
   "icon": "extension-icon.png",
@@ -9,7 +9,7 @@
   "license": "MIT",
   "commands": [
     {
-      "name": "gemini-spell",
+      "name": "pi-spell",
       "title": "Pi Spell",
       "description": "Fix and rewrite selected text",
       "mode": "view",

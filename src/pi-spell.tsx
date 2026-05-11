@@ -90,7 +90,7 @@ function parsePositiveInt(raw: string, defaultValue: number, minValue: number, m
 function looksLikeRuntimeStackTrace(text: string): boolean {
   const hasStackFrame = /\bat\s.+\(.+:\d+:\d+\)/.test(text);
   const hasRuntimeMarkers =
-    /React\.jsx: type is invalid|Error Component Stack|node_modules\/@raycast\/api|raycast\/extensions\/gemini-spell/i.test(
+    /React\.jsx: type is invalid|Error Component Stack|node_modules\/@raycast\/api|raycast\/extensions\/pi-spell/i.test(
       text,
     );
 
@@ -216,7 +216,6 @@ function resolvePiBin(preference?: string): string {
   const candidates = [
     preference?.trim(),
     process.env.PI_SPELL_PI_BIN,
-    process.env.GEMINI_SPELL_PI_BIN,
     process.env.PI_BIN,
     ...PI_PATHS.map((dir) => join(dir, "pi")),
   ].filter(Boolean) as string[];

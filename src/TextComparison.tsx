@@ -1,5 +1,5 @@
 import { Action, ActionPanel, List, closeMainWindow, openCommandPreferences } from "@raycast/api";
-import type { ProcessingMetrics, SuggestionVariant } from "./gemini-spell";
+import type { ProcessingMetrics, SuggestionVariant } from "./pi-spell";
 
 interface TextComparisonProps {
   originalText: string;

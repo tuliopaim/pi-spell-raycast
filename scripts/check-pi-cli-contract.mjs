@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const source = readFileSync(join(root, "src/gemini-spell.tsx"), "utf8");
+const source = readFileSync(join(root, "src/pi-spell.tsx"), "utf8");
 
 const requiredFlags = [
   "--model",
@@ -23,7 +23,7 @@ const missingFlags = requiredFlags.filter((flag) => !source.includes(`"${flag}"`
 const requiredSnippets = [
   "child.stdin.end(prompt)",
   "process.env.PI_SPELL_PI_BIN",
-  "process.env.GEMINI_SPELL_PI_BIN",
+  "process.env.PI_BIN",
   "terminateProcess(child)",
 ];
 const missingSnippets = requiredSnippets.filter((snippet) => !source.includes(snippet));
