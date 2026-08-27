@@ -9,5 +9,8 @@ raycast-env.d.ts
 .swiftpm
 compiled_raycast_swift
 
+# Vicinae specific files
+vicinae-env.d.ts
+
 # misc
 .DS_Store

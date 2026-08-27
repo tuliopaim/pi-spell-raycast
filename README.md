@@ -1,12 +1,13 @@
 # Pi Spell
 
-A Raycast extension that uses the local `pi` CLI to fix spelling and generate three rewrite suggestions from clipboard text.
+A Raycast-compatible Vicinae extension that uses the local `pi` CLI to fix spelling and generate three rewrite suggestions from clipboard text.
 
 ## Setup
 
 1. Install and authenticate the Pi CLI so `pi` works from a terminal.
-2. Run `npm run dev` to install the extension.
-3. Open the command preferences and configure:
+2. Run `npm install` to fetch dependencies.
+3. Run `npm run build:vicinae` to install the extension in Vicinae.
+4. Open the command preferences and configure:
    - `Pi Binary Path` (optional; set this if Raycast cannot find `pi`)
    - `Pi Model` (defaults to `opencode-go/deepseek-v4-flash`)
    - `Pi Thinking` (defaults to `off`)
@@ -14,6 +15,8 @@ A Raycast extension that uses the local `pi` CLI to fix spelling and generate th
    - `Debug Logs` (defaults to off)
 
 No Google API key is required. Pi authentication is inherited from your local Pi environment.
+
+For development, run `npm run dev` and keep it running while you edit the extension. Raycast development remains available through `npm run dev:raycast`.
 
 ## Usage
 
