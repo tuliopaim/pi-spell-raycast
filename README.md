@@ -9,7 +9,7 @@ A Raycast-compatible Vicinae extension that uses the local `pi` CLI to fix spell
 3. Run `npm run build:vicinae` to install the extension in Vicinae.
 4. Open the command preferences and configure:
    - `Pi Binary Path` (optional; set this if Raycast cannot find `pi`)
-   - `Pi Model` (defaults to `opencode-go/deepseek-v4-flash`)
+   - `Pi Model` (defaults to `openai-codex/gpt-6-luna`)
    - `Pi Thinking` (defaults to `off`)
    - `Request Timeout (ms)` (defaults to `120000`)
    - `Debug Logs` (defaults to off)
@@ -23,12 +23,13 @@ For development, run `npm run dev` and keep it running while you edit the extens
 1. Copy text from any app.
 2. Run the `Pi Spell` command.
 3. The command automatically processes the clipboard text and shows:
-   - `Minimal Fix` (grammar/spelling only)
-   - `Neutral Polish` (recommended)
-   - `Concise Professional`
+   - `Polished` (fluent US English; recommended, listed first)
+   - `Minimal` (spelling and grammar only)
+   - `Concise` (shorter and professional)
 4. Choose one suggestion and copy it:
    - Keyboard: use arrow keys to select, then press `Enter` to copy and close.
    - Mouse: double-click a suggestion to copy and close.
+   - `Cmd+C` copies without closing, `Cmd+R` runs Pi again, and `Cmd+E` opens preferences.
 
 ## Reliability
 
@@ -36,4 +37,4 @@ For development, run `npm run dev` and keep it running while you edit the extens
 - The clipboard text is sent to Pi over stdin; no live model call is made by the `npm run check:pi-cli-contract` validation script.
 - Raycast GUI PATHs are limited, so the extension searches common Homebrew, Nix, and system paths. Set `Pi Binary Path` if needed.
 - Pi runs are canceled when the command closes and are timed out according to `Request Timeout (ms)`.
-- Shows local observability metadata (model, thinking, latency, attempts, parse mode).
+- The detail panel shows word and character changes, plus the model, thinking level, and run time.

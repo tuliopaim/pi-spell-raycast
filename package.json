@@ -26,7 +26,7 @@
           "title": "Pi Model",
           "description": "Model to pass to pi --model",
           "type": "textfield",
-          "default": "opencode-go/deepseek-v4-flash",
+          "default": "openai-codex/gpt-6-luna",
           "required": true
         },
         {

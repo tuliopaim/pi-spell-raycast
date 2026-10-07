@@ -4,19 +4,20 @@ import { existsSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { useEffect, useState } from "react";
-import { ErrorDisplay } from "./ErrorDisplay";
+import { StatusView } from "./StatusView";
 import { TextComparison } from "./TextComparison";
-import { WelcomePage } from "./WelcomePage";
 
 const SYSTEM_INSTRUCTION = `You are a writing assistant for a Brazilian software engineer working with a US team.
 Return only valid JSON.
 Use US English.
 Do not add explanations, markdown, or extra keys.`;
 
-const DEFAULT_PI_MODEL = "opencode-go/deepseek-v4-flash";
+const DEFAULT_PI_MODEL = "openai-codex/gpt-6-luna";
 const DEFAULT_PI_THINKING = "off";
 const DEFAULT_TIMEOUT_MS = 120000;
 const PI_PATHS = [
+  join(homedir(), ".pi/agent/bin"),
+  join(homedir(), ".local/bin"),
   "/opt/homebrew/bin",
   "/usr/local/bin",
   join(homedir(), ".nix-profile/bin"),
@@ -438,8 +439,8 @@ export default function Command() {
   const [originalText, setOriginalText] = useState<string>("");
   const [suggestions, setSuggestions] = useState<SuggestionVariant[]>([]);
   const [metrics, setMetrics] = useState<ProcessingMetrics | null>(null);
-  const [homeMessage, setHomeMessage] = useState<string | undefined>(undefined);
-  const [loadingMessage, setLoadingMessage] = useState("Processing clipboard text with Pi...");
+  const [runId, setRunId] = useState(0);
+  const retry = () => setRunId((current) => current + 1);
 
   useEffect(() => {
     let mounted = true;
@@ -451,8 +452,6 @@ export default function Command() {
       setOriginalText("");
       setSuggestions([]);
       setMetrics(null);
-      setHomeMessage(undefined);
-      setLoadingMessage("Processing clipboard text with Pi...");
 
       try {
         const selectedText = (await Clipboard.readText()) ?? "";
@@ -463,12 +462,10 @@ export default function Command() {
 
         const normalizedSelectedText = selectedText.trim();
         if (!normalizedSelectedText) {
-          setHomeMessage("Let's improve something. Copy text to your clipboard and run Pi Spell.");
           return;
         }
 
         setIsLoading(true);
-        setLoadingMessage("Processing clipboard text with Pi...");
 
         const preferences = getPreferenceValues<CommandPreferences>();
         const piBin = resolvePiBin(preferences.piBin);
@@ -497,13 +494,6 @@ export default function Command() {
           timeoutMs,
           debugLogs,
           signal: abortController.signal,
-          onAttempt: (attempt, model) => {
-            if (!mounted) {
-              return;
-            }
-
-            setLoadingMessage(`Processing clipboard text with Pi (attempt ${attempt}, model: ${model})...`);
-          },
         });
 
         if (!mounted) {
@@ -546,19 +536,19 @@ export default function Command() {
       mounted = false;
       abortController.abort();
     };
-  }, []);
+  }, [runId]);
 
   if (error) {
-    return <ErrorDisplay isLoading={isLoading} errorMessage={error} />;
+    return <StatusView kind="error" message={error} onRetry={retry} />;
   }
 
   if (isLoading) {
-    return <WelcomePage isLoading={isLoading} message={loadingMessage} />;
+    return <StatusView kind="loading" originalText={originalText} />;
   }
 
   if (!metrics || suggestions.length === 0) {
-    return <WelcomePage isLoading={isLoading} message={homeMessage} />;
+    return <StatusView kind="empty" onRetry={retry} />;
   }
 
-  return <TextComparison originalText={originalText} suggestions={suggestions} metrics={metrics} />;
+  return <TextComparison originalText={originalText} suggestions={suggestions} metrics={metrics} onRetry={retry} />;
 }
